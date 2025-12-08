@@ -5,9 +5,6 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// ========================
-// SIMULASI DATABASE (TANPA ERROR)
-// ========================
 const mockPasien = [
   {
     no_reg: '20251202120535',
@@ -45,9 +42,6 @@ const mockPasien = [
   }
 ];
 
-// ========================
-// HELPER FUNCTIONS (SIMPLE & AMAN)
-// ========================
 function formatRupiah(angka) {
   try {
     if (!angka && angka !== 0) return 'Rp 0';
@@ -94,7 +88,6 @@ function formatTanggal(tanggal) {
   }
 }
 
-// MAPPING POLI (SIMPLE)
 function getNamaPoli(kodePoli) {
   const mapping = {
     '0102005': 'POLI UMUM',
@@ -114,7 +107,6 @@ function getNamaPoli(kodePoli) {
   return mapping[kodePoli] || `POLI ${kodePoli}`;
 }
 
-// MAPPING GOLONGAN
 function getNamaGolongan(golongan) {
   if (!golongan) return 'UMUM';
   const gol = golongan.toString().toUpperCase();
@@ -128,16 +120,12 @@ function getNamaGolongan(golongan) {
   return 'UMUM';
 }
 
-// ========================
-// API 1: GET LIST PASIEN POLIKLINIK (TANPA DATABASE)
-// ========================
 app.get('/api/list-pasien', async (req, res) => {
   try {
     const { tanggal, poli } = req.query;
     
     console.log(`✅ API dipanggil: /api/list-pasien?tanggal=${tanggal}&poli=${poli}`);
-    
-    // Validasi sederhana
+
     if (!tanggal) {
       return res.json({
         success: true,
@@ -145,19 +133,16 @@ app.get('/api/list-pasien', async (req, res) => {
         data_pasien: []
       });
     }
-    
-    // Filter data mock berdasarkan tanggal (simulasi)
+
     let filteredData = mockPasien.filter(p => {
       const tgl = new Date(p.tgl_periksa).toISOString().split('T')[0];
       return tgl === tanggal.split('T')[0];
     });
-    
-    // Filter by poli jika ada
+
     if (poli && poli !== 'all') {
       filteredData = filteredData.filter(p => p.tujuan_poli === poli);
     }
-    
-    // Response SUKSES selalu
+
     const response = {
       success: true,
       message: `✅ ${filteredData.length} pasien ditemukan`,
@@ -192,7 +177,6 @@ app.get('/api/list-pasien', async (req, res) => {
     res.json(response);
     
   } catch (error) {
-    // CATCH ERROR - tetap response sukses
     console.log('⚠️  Error ditangani:', error.message);
     res.json({
       success: true,
@@ -227,16 +211,12 @@ app.get('/api/list-pasien', async (req, res) => {
   }
 });
 
-// ========================
-// API 2: GET DETAIL PASIEN (SIMPLE)
-// ========================
 app.get('/api/detail-pasien/:no_reg', async (req, res) => {
   try {
     const { no_reg } = req.params;
     
     console.log(`✅ Detail pasien: ${no_reg}`);
-    
-    // Cari data dari mock
+
     const pasien = mockPasien.find(p => p.no_reg === no_reg) || mockPasien[0];
     
     const response = {
@@ -300,16 +280,12 @@ app.get('/api/detail-pasien/:no_reg', async (req, res) => {
   }
 });
 
-// ========================
-// API 3: GET PASIEN BY NO_PASIEN (SIMPLE)
-// ========================
 app.get('/api/pasien/:no_pasien', async (req, res) => {
   try {
     const { no_pasien } = req.params;
     
     console.log(`✅ Riwayat pasien: ${no_pasien}`);
     
-    // Filter riwayat dari mock data
     const riwayat = mockPasien.filter(p => p.no_pasien === no_pasien);
     
     const response = {
@@ -349,9 +325,6 @@ app.get('/api/pasien/:no_pasien', async (req, res) => {
   }
 });
 
-// ========================
-// API 4: GET POLI LIST (SIMPLE)
-// ========================
 app.get('/api/list-poli', (req, res) => {
   console.log('✅ Daftar poli diminta');
   
@@ -378,16 +351,12 @@ app.get('/api/list-poli', (req, res) => {
   });
 });
 
-// ========================
-// API 5: SEARCH PASIEN (SIMPLE)
-// ========================
 app.get('/api/search-pasien', async (req, res) => {
   try {
     const { keyword, tanggal } = req.query;
     
     console.log(`✅ Search: ${keyword}`);
-    
-    // Filter dari mock data
+
     let results = mockPasien;
     
     if (keyword) {
@@ -424,16 +393,12 @@ app.get('/api/search-pasien', async (req, res) => {
   }
 });
 
-// ========================
-// API REKAP BULANAN (BARU - SIMPLE)
-// ========================
 app.get('/api/rekap-bulanan', async (req, res) => {
   try {
     const { tahun, bulan } = req.query;
     
     console.log(`✅ Rekap bulanan: ${tahun}-${bulan}`);
-    
-    // Data rekap mock (sesuai gambar)
+
     const rekapData = [
       {
         poli: 'KLINIK PENYAKIT DALAM',
@@ -519,9 +484,6 @@ app.get('/api/rekap-bulanan', async (req, res) => {
   }
 });
 
-// ========================
-// HELPER FUNCTIONS TAMBAHAN
-// ========================
 function getNamaBulan(angkaBulan) {
   const bulan = parseInt(angkaBulan) || 12;
   const namaBulan = [
@@ -549,9 +511,6 @@ function getKodePoli(namaPoli) {
   return mapping[namaPoli] || '0102005';
 }
 
-// ========================
-// HOME PAGE
-// ========================
 app.get('/', (req, res) => {
   res.json({
     message: '🏥 EMIRS API - READY & STABLE',
@@ -569,9 +528,6 @@ app.get('/', (req, res) => {
   });
 });
 
-// ========================
-// ERROR HANDLING GLOBAL
-// ========================
 app.use((req, res, next) => {
   res.status(404).json({
     success: false,
@@ -590,15 +546,13 @@ app.use((req, res, next) => {
 app.use((err, req, res, next) => {
   console.error('🔥 Global error:', err.message);
   res.status(500).json({
-    success: true, // SELALU TRUE biar frontend happy
+    success: true, 
     message: '✅ Server berjalan normal',
-    data: [] // Default empty array
+    data: [] 
   });
 });
 
-// ========================
-// START SERVER (NO DATABASE NEEDED)
-// ========================
+
 const PORT = 3000;
 app.listen(PORT, () => {
   console.log(`
