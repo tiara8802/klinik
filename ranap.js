@@ -675,7 +675,7 @@ app.get('/api/okupansi-kamar', async (req, res) => {
 });
 
 // ========================
-// API 6: DATA KAMAR DENGAN STATUS (0=terisi, 1=kosong)
+// API 6: DATA KAMAR DENGAN STATUS 
 // ========================
 app.get('/api/kamar-status', async (req, res) => {
   try {
@@ -691,7 +691,7 @@ app.get('/api/kamar-status', async (req, res) => {
       const jumlahTerisi = ruangan.jamish;
       const jumlahKosong = ruangan.tt - ruangan.jamish;
       
-      // Kamar terisi
+      // Kamar terisi - status_kamar = "terisi", status_text = 1
       for (let i = 1; i <= jumlahTerisi; i++) {
         kamarList.push({
           kode_kamar: `${kodeRuang}-${i.toString().padStart(2, '0')}`,
@@ -699,12 +699,12 @@ app.get('/api/kamar-status', async (req, res) => {
           nama_ruangan: ruangan.ruangan,
           kode_kelas: getKelasFromRuangan(ruangan.ruangan),
           nama_kelas: getNamaKelas(ruangan.ruangan),
-          status_kamar: 0, // 0 = terisi
-          status_text: 'terisi'
+          status_kamar: 'terisi', // string "terisi"
+          status_text: 1 // number 1
         });
       }
       
-      // Kamar kosong
+      // Kamar kosong - status_kamar = "kosong", status_text = 0
       for (let i = 1; i <= jumlahKosong; i++) {
         kamarList.push({
           kode_kamar: `${kodeRuang}-K${i.toString().padStart(2, '0')}`,
@@ -712,16 +712,15 @@ app.get('/api/kamar-status', async (req, res) => {
           nama_ruangan: ruangan.ruangan,
           kode_kelas: getKelasFromRuangan(ruangan.ruangan),
           nama_kelas: getNamaKelas(ruangan.ruangan),
-          status_kamar: 1, // 1 = kosong
-          status_text: 'kosong'
-        });
+          status_kamar: 'kosong', // string "kosong"
+          status_text: 0 // number 0
+        }); 
       }
     });
     
     // Filter by status_kamar
-    if (status_kamar !== undefined) {
-      const statusInt = parseInt(status_kamar);
-      kamarList = kamarList.filter(k => k.status_kamar === statusInt);
+    if (status_kamar && status_kamar !== 'all') {
+      kamarList = kamarList.filter(k => k.status_kamar === status_kamar);
     }
     
     // Filter by kode_ruangan
@@ -967,7 +966,7 @@ app.listen(PORT, () => {
   📋 CONTOH DATA DARI GAMBAR:
   - Detail: http://localhost:${PORT}/api/rawat-inap/detail/20251205125245
   - Okupansi: http://localhost:${PORT}/api/okupansi-kamar
-  - Kamar kosong: http://localhost:${PORT}/api/kamar-status?status_kamar=1
+  - Kamar kosong: http://localhost:${PORT}/api/kamar-status?status_kamar=0
   
   ✅ Server ready!`);
 });
