@@ -145,8 +145,8 @@ const kamarController = {
                         nama_ruangan: ruangan.ruangan,
                         kode_kelas: helper.getKelasFromRuangan(ruangan.ruangan),
                         nama_kelas: helper.getNamaKelasFromRuangan(ruangan.ruangan),
-                        status_kamar: 0,
-                        status_text: 'terisi'
+                        status_kamar: 'terisi',
+                        status_text: 1
                     });
                 }
                 
@@ -157,8 +157,8 @@ const kamarController = {
                         nama_ruangan: ruangan.ruangan,
                         kode_kelas: helper.getKelasFromRuangan(ruangan.ruangan),
                         nama_kelas: helper.getNamaKelasFromRuangan(ruangan.ruangan),
-                        status_kamar: 1,
-                        status_text: 'kosong'
+                        status_kamar: 'kosong',
+                        status_text: 0
                     });
                 }
             });
