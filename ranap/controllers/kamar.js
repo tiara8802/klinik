@@ -1,5 +1,5 @@
-const mockData = require('../data/mockdata');
-const helper = require('../helpers/helper');
+const mockData = require('../ranap/data/mockdata');
+const helper = require('../ranap/helpers/helper');
 
 const kamarController = {
     // Data kamar tersedia

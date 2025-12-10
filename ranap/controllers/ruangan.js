@@ -1,5 +1,5 @@
 const pool = require('../db');
-const helper = require('../helpers/helper');
+const helper = require('../ranap/helpers/helper');
 
 const ruanganController = {
     // Ketersediaan bed per ruangan
