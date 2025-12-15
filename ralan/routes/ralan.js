@@ -1,26 +1,33 @@
 const express = require('express');
 const router = express.Router();
-const raianController = require('../controllers/ralan');
 
-// API 1: GET PELAYANAN PASIEN
-router.get('/getpelayanan', raianController.getPelayanan);
+const ralanController = require('../controllers/ralan');
 
-// API 2: LIST PASIEN
-router.get('/list-pasien', raianController.listPasien);
+// ========== API EMIRS ROUTES ==========
 
-// API 3: DETAIL PASIEN BY NO_REG
-router.get('/detail-pasien/:no_reg', raianController.detailPasien);
+// Poliklinik
+router.get('/poliklinik', (req, res) => ralanController.getAllPoliklinik(req, res));
+router.get('/poliklinik/:tujuan_poli/pasien', (req, res) => ralanController.getPasienByPoliklinik(req, res));
 
-// API 4: RIWAYAT PASIEN BY NO_PASIEN
-router.get('/pasien/:no_pasien', raianController.riwayatPasien);
+// Pasien
+router.get('/detail-pasien/:no_reg', (req, res) => ralanController.getDetailPasien(req, res));
+router.get('/pasien/:no_pasien', (req, res) => ralanController.getPasienByNo(req, res));
+router.get('/search-pasien', (req, res) => ralanController.searchPasien(req, res));
 
-// API 5: LIST POLI
-router.get('/list-poli', raianController.listPoli);
+// Pelayanan
+router.get('/pelayanan-pasien/:no_pasien', (req, res) => ralanController.getPelayananByPasien(req, res));
+router.get('/pelayanan-tanggal', (req, res) => ralanController.getPelayananByDate(req, res));
+router.get('/pelayanan-detail/:no_reg', (req, res) => ralanController.getPelayananDetail(req, res));
 
-// API 6: SEARCH PASIEN
-router.get('/search-pasien', raianController.searchPasien);
+// Laporan
+router.get('/laporan-pasien-bulanan', (req, res) => ralanController.getLaporanPasienPerBulan(req, res));
+router.get('/laporan-detail-pasien', (req, res) => ralanController.getDetailPasienLaporan(req, res));
+router.get('/rekap-poliklinik', (req, res) => ralanController.getRekapPoliklinik(req, res));
 
-// API 7: REKAP BULANAN
-router.get('/rekap-bulanan', raianController.rekapBulanan);
+// Rekap
+router.get('/rekap-bulanan', (req, res) => ralanController.rekapBulanan(req, res));
+
+// Health check
+router.get('/health', (req, res) => ralanController.getHealth(req, res));;
 
 module.exports = router;

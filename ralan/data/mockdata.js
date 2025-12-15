@@ -1,3 +1,4 @@
+// Data Master Pasien
 const masterPasien = [
   {
     no_pasien: '374469',

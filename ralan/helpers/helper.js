@@ -113,14 +113,22 @@ function getNamaGolongan(golongan) {
   return 'UMUM';
 }
 
-function getNamaBulan(angkaBulan) {
-  const bulan = parseInt(angkaBulan) || 12;
-  const namaBulan = [
+const getMonthName = (month) => {
+  const months = [
     'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
     'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
   ];
-  return namaBulan[bulan - 1] || 'Desember';
-}
+  return months[month - 1] || 'Tidak Diketahui';
+};
+
+const formatDate = (dateString) => {
+  if (!dateString) return null;
+  try {
+    return new Date(dateString).toISOString().split('T')[0];
+  } catch {
+    return dateString;
+  }
+};
 
 function getKodePoli(namaPoli) {
   const poli = masterPoli.find(p => p.nama_poli === namaPoli);
@@ -138,6 +146,7 @@ module.exports = {
   getLokasiPoli,
   getSpesialisasiDokter,
   getNamaGolongan,
-  getNamaBulan,
+  getMonthName,
+  formatDate,
   getKodePoli
 };
