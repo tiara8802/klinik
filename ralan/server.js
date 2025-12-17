@@ -8,6 +8,7 @@ const pool = require('./db');
 
 // Import routes
 const ralanRoutes = require('./routes/ralan');
+const resumeRoutes = require('./routes/resume'); 
 
 const app = express();
 
@@ -63,7 +64,8 @@ app.get('/db-test', async (req, res) => {
     // Try to get EMIRS tables
     const emirsTables = [
       'poliklinik', 'pasien', 'reg_periksa', 'dokter', 
-      'pegawai', 'penjab', 'resep_obat', 'resep_dokter'
+      'pegawai', 'penjab', 'resep_obat', 'resep_dokter',
+      'pasien_ralan', 'pasien_igd', 'rekap_pasienralan' // <-- DITAMBAH TABEL RESUME
     ];
     
     const tableStatus = [];
@@ -121,6 +123,7 @@ app.get('/db-test', async (req, res) => {
 
 // API Routes
 app.use('/api', ralanRoutes);
+app.use('/api', resumeRoutes); // <-- BARU DITAMBAH
 
 // Default route dengan semua endpoint yang tersedia
 app.get('/', (req, res) => {
@@ -137,27 +140,38 @@ app.get('/', (req, res) => {
       status: 'connected'
     },
     endpoints: {
-      // System
+      // ============= SYSTEM =============
       health_check: 'GET /health',
       database_test: 'GET /db-test',
       
-      // Poliklinik
-      get_all_poliklinik: 'GET /api/poliklinik',
+      // ============= RESUME MEDIS (BARU) =============
+      resume_medis: 'GET /api/resume-medis?no_pasien=XXXX&tanggal_pelayanan=YYYY-MM-DD',
+      resume_medis_check: 'GET /api/resume-medis/check',
       
-      // Pasien
+      // ============= POLIKLINIK =============
+      get_all_poliklinik: 'GET /api/poliklinik',
+      get_pasien_by_poliklinik: 'GET /api/poliklinik/:tujuan_poli/pasien',
+      
+      // ============= PASIEN =============
       detail_pasien: 'GET /api/detail-pasien/:no_reg',
       pasien_by_no: 'GET /api/pasien/:no_pasien',
       
-      // Pelayanan
+      // ============= PELAYANAN =============
       pelayanan_by_pasien: 'GET /api/pelayanan-pasien/:no_pasien',
       pelayanan_by_date: 'GET /api/pelayanan-tanggal?tanggal=YYYY-MM-DD',
       pelayanan_detail: 'GET /api/pelayanan-detail/:no_reg',
       
-      // Rekap
+      // ============= REKAP =============
       rekap_bulanan: 'GET /api/rekap-bulanan',
-      rekap_by_date: 'GET /api/rekap-bulanan?tanggal=YYYY-MM-DD', 
+      rekap_bulanan_by_date: 'GET /api/rekap-bulanan?tanggal=YYYY-MM-DD',
+      
     },
-    documentation: 'API untuk sistem E-MIRS Rumah Sakit'
+    example_usage: {
+      resume_medis: 'GET /api/resume-medis?no_pasien=000005&tanggal_pelayanan=2024-03-15',
+      rekap_harian: 'GET /api/rekap-harian?tanggal=2024-03-15',
+      rekap_bulanan: 'GET /api/rekap-bulanan?tahun=2024&bulan=3'
+    },
+    documentation: 'API untuk sistem E-MIRS Rumah Sakit - Termasuk fitur Resume Medis baru'
   });
 });
 
@@ -184,7 +198,12 @@ app.get('/routes', (req, res) => {
   
   res.json({
     total_routes: routes.length,
-    routes: routes
+    routes: routes,
+    server_info: {
+      name: 'API EMIRS',
+      version: '2.0.0',
+      timestamp: new Date().toISOString()
+    }
   });
 });
 
@@ -195,7 +214,8 @@ app.use((req, res) => {
     message: 'Endpoint tidak ditemukan',
     requested_url: req.originalUrl,
     method: req.method,
-    suggestion: 'Cek endpoint yang tersedia di GET /'
+    suggestion: 'Cek endpoint yang tersedia di GET /',
+    available_endpoints: 'GET / untuk melihat semua endpoint yang tersedia'
   });
 });
 
@@ -216,7 +236,11 @@ app.use((err, req, res, next) => {
       message: 'Database error',
       error_code: err.code,
       error_message: err.message,
-      suggestion: 'Periksa query SQL dan struktur database'
+      suggestion: 'Periksa query SQL dan struktur database',
+      connection_info: {
+        host: process.env.DB_HOST,
+        database: process.env.DB_NAME
+      }
     });
   }
   
@@ -235,7 +259,8 @@ app.use((err, req, res, next) => {
     success: false,
     message: 'Terjadi kesalahan pada server',
     error: process.env.NODE_ENV === 'development' ? err.message : undefined,
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
+    support: 'Hubungi administrator sistem jika error berlanjut'
   });
 });
 
@@ -268,11 +293,26 @@ app.listen(PORT, HOST, async () => {
     const [tables] = await pool.query("SHOW TABLES");
     console.log(`📁 Total tables: ${tables.length}`);
     
+    // Check important tables
+    const importantTables = ['pasien_ralan', 'pasien_igd', 'rekap_pasienralan', 'pasien'];
+    console.log('\n🔍 Checking important tables:');
+    for (const table of importantTables) {
+      const [check] = await pool.query(`SHOW TABLES LIKE '${table}'`);
+      console.log(`   ${check.length > 0 ? '✅' : '❌'} ${table}`);
+    }
+    
+    console.log('\n✅ API Features Ready:');
+    console.log('   • Resume Medis API');
+    console.log('   • Rekap Harian/Bulanan/Tahunan');
+    console.log('   • Poliklinik & Pasien Management');
+    console.log('   • Health Check & Monitoring');
+    
   } catch (error) {
     console.error('❌ Database connection: FAILED');
     console.error(`   Error: ${error.message}`);
     console.error(`   Code: ${error.code}`);
     console.error('   Suggestion: Periksa koneksi database di file .env');
+    console.error(`   Config: ${process.env.DB_HOST}:${process.env.DB_PORT}/${process.env.DB_NAME}`);
   }
   
   console.log('============================================\n');
