@@ -1,17 +1,11 @@
 const express = require('express');
 const router = express.Router();
-const apotekController = require('../controllers/apotek');
+const apotek = require('../controllers/apotek'); // GANTI disini
 
-// API 1: GET RESEP PASIEN (parameter: no_pasien, tanggal_pelayanan)
-router.get('/resep-pasien', apotekController.getResepPasien);
+// Route untuk mendapatkan list obat berdasarkan no_rm dan tanggal
+router.get('/obat', apotek.getObatByPasien);
 
-// API 2: LIST RESEP BY TANGGAL (parameter: tanggal)
-router.get('/list-resep', apotekController.listResepByTanggal);
-
-// API 3: DETAIL RESEP BY NO_RESEP (parameter: no_resep)
-router.get('/detail-resep/:no_resep', apotekController.detailResep);
-
-// API 4: GET OBAT BY NO_REG (parameter: no_reg)
-router.get('/obat-reg/:no_reg', apotekController.getObatByNoReg);
+// Route untuk mendapatkan info pasien
+router.get('/pasien/:no_rm', apotek.getPasienInfo);
 
 module.exports = router;

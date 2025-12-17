@@ -605,6 +605,267 @@ app.get('/api/dokter-with-jadwal', async (req, res) => {
     }
 });
 
+// ============================================
+// RESUME MEDIS ENDPOINTS - TAMBAHAN BARU
+// ============================================
+
+// 13. GET resume medis berdasarkan no_pasien/no_rm dan tanggal
+app.get('/api/resume-medis', async (req, res) => {
+    try {
+        const { no_pasien, tanggal_pelayanan } = req.query;
+
+        // Validasi input
+        if (!no_pasien || !tanggal_pelayanan) {
+            return res.status(400).json({
+                success: false,
+                message: 'Parameter no_pasien dan tanggal_pelayanan diperlukan'
+            });
+        }
+
+        // Validasi format tanggal (YYYY-MM-DD)
+        const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+        if (!dateRegex.test(tanggal_pelayanan)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Format tanggal harus YYYY-MM-DD'
+            });
+        }
+
+        // Query untuk mencari data dari pasien_ralan dan pasien_igd
+        const query = `
+            (SELECT 
+                pr.no_pasien as identifier,
+                pr.keluhan_utama,
+                pr.s,
+                pr.o,
+                pr.a,
+                pr.p,
+                pr.tanggal,
+                pr.no_reg,
+                'RALAN' as jenis_pelayanan
+            FROM pasien_ralan pr
+            WHERE pr.no_pasien = ? 
+                AND DATE(pr.tanggal) = ?)
+            
+            UNION
+            
+            (SELECT 
+                pi.no_rm as identifier,
+                pi.keluhan_utama,
+                pi.s,
+                pi.o,
+                pi.a,
+                pi.p,
+                pi.tanggal,
+                pi.no_reg,
+                'IGD' as jenis_pelayanan
+            FROM pasien_igd pi
+            WHERE pi.no_rm = ? 
+                AND DATE(pi.tanggal) = ?)
+            
+            ORDER BY tanggal DESC
+        `;
+
+        const [rows] = await req.db.execute(query, [
+            no_pasien, tanggal_pelayanan,
+            no_pasien, tanggal_pelayanan
+        ]);
+
+        if (rows.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: 'Data resume medis tidak ditemukan'
+            });
+        }
+
+        res.json({
+            success: true,
+            message: 'Resume medis berhasil diambil',
+            data: rows
+        });
+
+    } catch (error) {
+        console.error('Error in /api/resume-medis:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Terjadi kesalahan server',
+            error: error.message
+        });
+    }
+});
+
+
+// 15. GET search resume medis (fleksibel)
+app.get('/api/resume-medis/search', async (req, res) => {
+    try {
+        const { no_pasien, no_reg, tanggal } = req.query;
+
+        // Validasi minimal salah satu parameter ada
+        if (!no_pasien && !no_reg) {
+            return res.status(400).json({
+                success: false,
+                message: 'Salah satu parameter diperlukan: no_pasien atau no_reg'
+            });
+        }
+
+        if (!tanggal) {
+            return res.status(400).json({
+                success: false,
+                message: 'Parameter tanggal diperlukan'
+            });
+        }
+
+        // Validasi format tanggal
+        const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+        if (!dateRegex.test(tanggal)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Format tanggal harus YYYY-MM-DD'
+            });
+        }
+
+        let rows;
+        if (no_pasien) {
+            const query = `
+                (SELECT 
+                    pr.no_pasien as identifier,
+                    pr.keluhan_utama,
+                    pr.s,
+                    pr.o,
+                    pr.a,
+                    pr.p,
+                    pr.tanggal,
+                    pr.no_reg,
+                    'RALAN' as jenis_pelayanan
+                FROM pasien_ralan pr
+                WHERE pr.no_pasien = ? 
+                    AND DATE(pr.tanggal) = ?)
+                
+                UNION
+                
+                (SELECT 
+                    pi.no_rm as identifier,
+                    pi.keluhan_utama,
+                    pi.s,
+                    pi.o,
+                    pi.a,
+                    pi.p,
+                    pi.tanggal,
+                    pi.no_reg,
+                    'IGD' as jenis_pelayanan
+                FROM pasien_igd pi
+                WHERE pi.no_rm = ? 
+                    AND DATE(pi.tanggal) = ?)
+                
+                ORDER BY tanggal DESC
+            `;
+
+            [rows] = await req.db.execute(query, [
+                no_pasien, tanggal,
+                no_pasien, tanggal
+            ]);
+        } else if (no_reg) {
+            const query = `
+                (SELECT 
+                    pr.no_pasien as identifier,
+                    pr.keluhan_utama,
+                    pr.s,
+                    pr.o,
+                    pr.a,
+                    pr.p,
+                    pr.tanggal,
+                    pr.no_reg,
+                    'RALAN' as jenis_pelayanan
+                FROM pasien_ralan pr
+                WHERE pr.no_reg = ? 
+                    AND DATE(pr.tanggal) = ?)
+                
+                UNION
+                
+                (SELECT 
+                    pi.no_rm as identifier,
+                    pi.keluhan_utama,
+                    pi.s,
+                    pi.o,
+                    pi.a,
+                    pi.p,
+                    pi.tanggal,
+                    pi.no_reg,
+                    'IGD' as jenis_pelayanan
+                FROM pasien_igd pi
+                WHERE pi.no_reg = ? 
+                    AND DATE(pi.tanggal) = ?)
+                
+                ORDER BY tanggal DESC
+            `;
+
+            [rows] = await req.db.execute(query, [
+                no_reg, tanggal,
+                no_reg, tanggal
+            ]);
+        }
+
+        if (rows.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: 'Data resume medis tidak ditemukan'
+            });
+        }
+
+        res.json({
+            success: true,
+            message: 'Pencarian resume medis berhasil',
+            data: rows
+        });
+
+    } catch (error) {
+        console.error('Error in /api/resume-medis/search:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Terjadi kesalahan server',
+            error: error.message
+        });
+    }
+});
+
+// 16. GET health check khusus resume medis
+app.get('/api/resume-medis/health', async (req, res) => {
+    try {
+        // Cek koneksi ke tabel yang dibutuhkan
+        const [tables] = await req.db.query(`
+            SHOW TABLES LIKE 'pasien_ralan' OR 
+            SHOW TABLES LIKE 'pasien_igd'
+        `);
+        
+        const tablesExist = tables.length > 0;
+        const tableNames = tables.map(t => Object.values(t)[0]);
+        
+        res.json({
+            success: true,
+            service: 'resume-medis-api',
+            status: 'healthy',
+            timestamp: new Date().toISOString(),
+            database: {
+                connected: true,
+                required_tables_exist: tablesExist,
+                tables_found: tableNames
+            },
+            endpoints: [
+                '/api/resume-medis?no_pasien=123&tanggal_pelayanan=2024-01-15',
+                '/api/resume-medis/by-reg?no_reg=REG001&tanggal_pelayanan=2024-01-15',
+                '/api/resume-medis/search?no_pasien=123&tanggal=2024-01-15'
+            ]
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            service: 'resume-medis-api',
+            status: 'unhealthy',
+            error: error.message
+        });
+    }
+});
+
 // Error handling middleware
 app.use((error, req, res, next) => {
     console.error('Server Error:', error);
@@ -629,4 +890,9 @@ app.listen(PORT, () => {
     console.log(`🚀 Server berjalan di http://localhost:${PORT}`);
     console.log(`📊 Menggunakan field 'jadwal' dari tabel dokter`);
     console.log(`🎯 Contoh binary jadwal: 0111110 = Senin-Jumat praktek`);
+    console.log(`\n🆕 ENDPOINT RESUME MEDIS BARU:`);
+    console.log(`   📍 GET  /api/resume-medis?no_pasien=123&tanggal_pelayanan=2024-01-15`);
+    console.log(`   📍 GET  /api/resume-medis/by-reg?no_reg=REG001&tanggal_pelayanan=2024-01-15`);
+    console.log(`   📍 GET  /api/resume-medis/search?no_pasien=123&tanggal=2024-01-15`);
+    console.log(`   📍 GET  /api/resume-medis/health - Health check`);
 });

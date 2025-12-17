@@ -1,317 +1,381 @@
-const mockData = require('../ranap/data/mockdata');
-const helper = require('../ranap/helpers/helper');
+// controllers/ranapController.js
+const pool = require('../config/database');
 
-const rawatInapController = {
-    // List pasien rawat inap
-    listPasien: async (req, res) => {
+console.log('✅ ranapController loaded successfully');
+
+const ranapController = {
+    // 1. LIST PASIEN
+    list: async (req, res) => {
         try {
-            const { status, kamar, tanggal } = req.query;
+            const { status, kamar, search } = req.query;
             
-            console.log(`✅ List rawat inap: status=${status}, kamar=${kamar}, tanggal=${tanggal}`);
+            console.log(`📋 LIST - status: ${status}, kamar: ${kamar}, search: ${search}`);
             
-            let filteredData = [...mockData.mockRawatInap];
+            let query = `
+                SELECT 
+                    no_reg,
+                    no_rm,
+                    kode_kamar,
+                    no_bed,
+                    tgl_masuk,
+                    jam_masuk,
+                    tgl_keluar,
+                    dokter,
+                    diagnosa_masuk,
+                    nama_pasien
+                FROM pasien_inap 
+                WHERE 1=1
+            `;
             
+            const params = [];
+            
+            // Filter status
             if (status && status !== 'all') {
-                filteredData = filteredData.filter(p => p.status === status);
+                if (status === 'Dirawat') {
+                    query += ' AND (tgl_keluar IS NULL OR tgl_keluar = "0000-00-00")';
+                } else if (status === 'Pulang') {
+                    query += ' AND (tgl_keluar IS NOT NULL AND tgl_keluar != "0000-00-00")';
+                }
             }
             
+            // Filter kamar
             if (kamar && kamar !== 'all') {
-                filteredData = filteredData.filter(p => p.kamar === kamar);
+                query += ' AND kode_kamar = ?';
+                params.push(kamar);
             }
             
-            if (tanggal) {
-                filteredData = filteredData.filter(p => {
-                    const tgl = new Date(p.tgl_masuk).toISOString().split('T')[0];
-                    return tgl === tanggal;
-                });
+            // Filter search
+            if (search && search.trim() !== '') {
+                query += ' AND (no_rm LIKE ? OR no_reg LIKE ? OR nama_pasien LIKE ?)';
+                const searchTerm = `%${search.trim()}%`;
+                params.push(searchTerm, searchTerm, searchTerm);
             }
             
-            const response = {
+            query += ' ORDER BY tgl_masuk DESC LIMIT 100';
+            
+            console.log('📝 Query:', query);
+            console.log('📝 Params:', params);
+            
+            const [rows] = await pool.execute(query, params);
+            
+            // Format data
+            const data = rows.map(p => ({
+                no_reg: p.no_reg,
+                no_rm: p.no_rm,
+                nama_pasien: p.nama_pasien || '-',
+                kamar: p.kode_kamar || '-',
+                no_bed: p.no_bed || '-',
+                dokter: p.dokter || '-',
+                status: p.tgl_keluar && p.tgl_keluar !== '0000-00-00' ? 'Pulang' : 'Dirawat',
+                tgl_masuk: formatDateTime(p.tgl_masuk, p.jam_masuk),
+                tgl_keluar: p.tgl_keluar ? formatDateTime(p.tgl_keluar, '') : '-',
+                diagnosa: p.diagnosa_masuk || '-'
+            }));
+            
+            res.json({
                 success: true,
-                message: `✅ ${filteredData.length} pasien rawat inap ditemukan`,
-                jumlah_pasien: filteredData.length,
-                filter: {
-                    status: status || 'Semua',
-                    kamar: kamar || 'Semua',
-                    tanggal: tanggal || 'Semua'
-                },
-                data_pasien: filteredData.map((pasien, index) => ({
-                    no: index + 1,
-                    no_rm: pasien.no_rm,
-                    no_reg: pasien.no_reg,
-                    nama_pasien: pasien.nama_pasien,
-                    no_sep: pasien.no_sep,
-                    kelas: pasien.kelas,
-                    kamar: pasien.kamar,
-                    no_bed: pasien.no_bed,
-                    gol_pasien: pasien.gol_pasien,
-                    hp: pasien.hp,
-                    status: pasien.status,
-                    tgl_masuk: helper.formatTanggal(pasien.tgl_masuk),
-                    lama_dirawat: helper.hitungLamaDirawat(pasien.tgl_masuk, pasien.tgl_keluar),
-                    dokter: pasien.dokter
-                }))
-            };
-            
-            res.json(response);
+                message: `✅ ${rows.length} pasien ditemukan`,
+                total: rows.length,
+                data: data
+            });
             
         } catch (error) {
-            console.log('⚠️  Error:', error.message);
+            console.error('❌ LIST ERROR:', error.message);
             res.status(500).json({
                 success: false,
-                message: 'Gagal mengambil data pasien'
+                message: 'Gagal mengambil data pasien',
+                error: error.message
             });
         }
     },
-
-    // Detail pasien by no_reg
-    detailPasien: async (req, res) => {
+    
+    // 2. DETAIL PASIEN
+    detail: async (req, res) => {
         try {
             const { no_reg } = req.params;
+            console.log(`🔍 DETAIL: ${no_reg}`);
             
-            console.log(`✅ Detail rawat inap: ${no_reg}`);
+            const [rows] = await pool.execute(
+                'SELECT * FROM pasien_inap WHERE no_reg = ? LIMIT 1',
+                [no_reg]
+            );
             
-            const pasien = mockData.mockRawatInap.find(p => p.no_reg === no_reg);
-            
-            if (!pasien) {
-                return res.json({
+            if (rows.length === 0) {
+                return res.status(404).json({
                     success: false,
                     message: 'Pasien tidak ditemukan'
                 });
             }
             
-            // Data mock untuk detail
-            const riwayatPemeriksaan = [
-                {
-                    tanggal: '2025-12-06 08:00:00',
-                    dokter: pasien.dokter,
-                    tekanan_darah: '120/80 mmHg',
-                    nadi: '78 bpm',
-                    suhu: '36.5°C',
-                    pernapasan: '18 bpm',
-                    catatan: 'Keadaan umum baik, keluhan nyeri berkurang'
-                }
-            ];
+            const pasien = rows[0];
             
-            const pengobatan = [
-                {
-                    obat: 'Paracetamol 500mg',
-                    dosis: '1 tablet',
-                    frekuensi: '3x sehari',
-                    route: 'Oral',
-                    tanggal_mulai: '2025-12-05',
-                    tanggal_selesai: '2025-12-08'
-                }
-            ];
-            
-            const pemeriksaanPenunjang = [
-                {
-                    jenis: 'Laboratorium',
-                    pemeriksaan: 'Darah Lengkap',
-                    hasil: 'Hb: 13.5 g/dL, Leukosit: 8.200/μL, Trombosit: 250.000/μL',
-                    tanggal: '2025-12-05'
-                }
-            ];
-            
-            const response = {
+            res.json({
                 success: true,
-                message: '✅ Detail pasien rawat inap ditemukan',
                 data: {
-                    identitas: {
-                        no_rm: pasien.no_rm,
-                        no_reg: pasien.no_reg,
-                        nama_pasien: pasien.nama_pasien,
-                        tgl_lahir: helper.formatTanggalOnly(pasien.tgl_lahir),
-                        usia: helper.hitungUmur(pasien.tgl_lahir),
-                        jenis_kelamin: pasien.jenis_kelamin === 'L' ? 'Laki-laki' : 'Perempuan',
-                        alamat: pasien.alamat,
-                        no_sep: pasien.no_sep,
-                        gol_pasien: pasien.gol_pasien,
-                        hp: pasien.hp
-                    },
-                    
-                    rawat_inap: {
-                        status: pasien.status,
-                        kelas: pasien.kelas,
-                        kamar: pasien.kamar,
-                        no_bed: pasien.no_bed,
-                        dokter_penanggungjawab: pasien.dokter,
-                        tgl_masuk: helper.formatTanggal(pasien.tgl_masuk),
-                        tgl_keluar: pasien.tgl_keluar ? helper.formatTanggal(pasien.tgl_keluar) : '-',
-                        lama_dirawat: helper.hitungLamaDirawat(pasien.tgl_masuk, pasien.tgl_keluar)
-                    },
-                    
-                    medis: {
-                        diagnosa_masuk: pasien.diagnosa_masuk,
-                        diagnosa_keluar: pasien.diagnosa_keluar || '-',
-                        alergi: 'Tidak ada',
-                        riwayat_penyakit: 'Hipertensi 5 tahun',
-                        kondisi_sekarang: 'Stabil'
-                    },
-                    
-                    riwayat_pemeriksaan: riwayatPemeriksaan.map((r, i) => ({
-                        no: i + 1,
-                        tanggal: helper.formatTanggal(r.tanggal),
-                        dokter: r.dokter,
-                        tanda_vital: {
-                            tekanan_darah: r.tekanan_darah,
-                            nadi: r.nadi,
-                            suhu: r.suhu,
-                            pernapasan: r.pernapasan
-                        },
-                        catatan: r.catatan
-                    })),
-                    
-                    pengobatan: pengobatan.map((o, i) => ({
-                        no: i + 1,
-                        obat: o.obat,
-                        dosis: o.dosis,
-                        frekuensi: o.frekuensi,
-                        route: o.route,
-                        periode: `${helper.formatTanggalOnly(o.tanggal_mulai)} - ${helper.formatTanggalOnly(o.tanggal_selesai)}`
-                    })),
-                    
-                    pemeriksaan_penunjang: pemeriksaanPenunjang.map((p, i) => ({
-                        no: i + 1,
-                        jenis: p.jenis,
-                        pemeriksaan: p.pemeriksaan,
-                        hasil: p.hasil,
-                        tanggal: helper.formatTanggalOnly(p.tanggal)
-                    })),
-                    
-                    biaya: {
-                        kamar: {
-                            tarif_harian: helper.formatRupiah(500000),
-                            lama: helper.hitungLamaDirawat(pasien.tgl_masuk, pasien.tgl_keluar).split(' ')[0],
-                            total: helper.formatRupiah(500000 * parseInt(helper.hitungLamaDirawat(pasien.tgl_masuk, pasien.tgl_keluar).split(' ')[0] || 1))
-                        },
-                        obat: helper.formatRupiah(750000),
-                        tindakan: helper.formatRupiah(1200000),
-                        laboratorium: helper.formatRupiah(450000),
-                        total: helper.formatRupiah(2900000)
-                    }
+                    no_reg: pasien.no_reg,
+                    no_rm: pasien.no_rm,
+                    nama_pasien: pasien.nama_pasien || '-',
+                    kamar: pasien.kode_kamar || '-',
+                    no_bed: pasien.no_bed || '-',
+                    dokter: pasien.dokter || '-',
+                    tgl_masuk: formatDateTime(pasien.tgl_masuk, pasien.jam_masuk),
+                    tgl_keluar: pasien.tgl_keluar ? formatDateTime(pasien.tgl_keluar, pasien.jam_keluar) : '-',
+                    diagnosa_masuk: pasien.diagnosa_masuk || '-',
+                    status: pasien.tgl_keluar && pasien.tgl_keluar !== '0000-00-00' ? 'Pulang' : 'Dirawat'
                 }
-            };
-            
-            res.json(response);
+            });
             
         } catch (error) {
-            console.log('⚠️  Error:', error.message);
+            console.error('❌ DETAIL ERROR:', error.message);
             res.status(500).json({
                 success: false,
-                message: 'Gagal mengambil detail pasien'
+                message: 'Gagal mengambil detail',
+                error: error.message
             });
         }
     },
-
-    // Riwayat pasien by no_rm
-    riwayatPasien: async (req, res) => {
+    
+    // 3. RIWAYAT PASIEN
+    riwayat: async (req, res) => {
         try {
             const { no_rm } = req.params;
+            console.log(`📊 RIWAYAT: ${no_rm}`);
             
-            console.log(`✅ Riwayat rawat inap pasien: ${no_rm}`);
+            const [rows] = await pool.execute(
+                `SELECT no_reg, tgl_masuk, jam_masuk, tgl_keluar, dokter, diagnosa_masuk, kode_kamar
+                 FROM pasien_inap 
+                 WHERE no_rm = ? 
+                 ORDER BY tgl_masuk DESC`,
+                [no_rm]
+            );
             
-            const riwayat = mockData.mockRawatInap.filter(p => p.no_rm === no_rm);
+            res.json({
+                success: true,
+                total: rows.length,
+                data: rows.map(r => ({
+                    no_reg: r.no_reg,
+                    tgl_masuk: formatDateTime(r.tgl_masuk, r.jam_masuk),
+                    tgl_keluar: r.tgl_keluar ? formatDateTime(r.tgl_keluar, '') : '-',
+                    dokter: r.dokter || '-',
+                    kamar: r.kode_kamar || '-',
+                    diagnosa: r.diagnosa_masuk || '-'
+                }))
+            });
             
-            if (riwayat.length === 0) {
-                return res.json({
-                    success: false,
-                    message: 'Tidak ada riwayat rawat inap untuk pasien ini'
+        } catch (error) {
+            console.error('❌ RIWAYAT ERROR:', error.message);
+            res.status(500).json({
+                success: false,
+                message: 'Gagal mengambil riwayat',
+                error: error.message
+            });
+        }
+    },
+    
+    // 4. STATISTIK
+    statistik: async (req, res) => {
+        try {
+            console.log('📈 STATISTIK');
+            
+            const [[stats]] = await pool.execute(`
+                SELECT 
+                    COUNT(*) as total,
+                    SUM(CASE WHEN (tgl_keluar IS NULL OR tgl_keluar = "0000-00-00") THEN 1 ELSE 0 END) as dirawat,
+                    SUM(CASE WHEN (tgl_keluar IS NOT NULL AND tgl_keluar != "0000-00-00") THEN 1 ELSE 0 END) as pulang
+                FROM pasien_inap
+            `);
+            
+            res.json({
+                success: true,
+                data: {
+                    total: stats.total || 0,
+                    dirawat: stats.dirawat || 0,
+                    pulang: stats.pulang || 0
+                }
+            });
+            
+        } catch (error) {
+            console.error('❌ STATISTIK ERROR:', error.message);
+            res.status(500).json({
+                success: false,
+                message: 'Gagal mengambil statistik',
+                error: error.message
+            });
+        }
+    },
+    
+    // 5. SEARCH
+    search: async (req, res) => {
+        try {
+            const { q } = req.query;
+            
+            if (!q) {
+                return res.json({ 
+                    success: true, 
+                    total: 0, 
+                    data: [] 
                 });
             }
             
-            const pasien = riwayat[0];
+            console.log(`🔎 SEARCH: "${q}"`);
             
-            const response = {
+            const [rows] = await pool.execute(
+                `SELECT no_reg, no_rm, nama_pasien, kode_kamar, no_bed, tgl_masuk, dokter
+                 FROM pasien_inap 
+                 WHERE no_rm LIKE ? OR nama_pasien LIKE ?
+                 ORDER BY tgl_masuk DESC 
+                 LIMIT 20`,
+                [`%${q}%`, `%${q}%`]
+            );
+            
+            res.json({
                 success: true,
-                message: `✅ ${riwayat.length} riwayat rawat inap ditemukan`,
-                info_pasien: {
-                    no_rm: pasien.no_rm,
-                    nama_pasien: pasien.nama_pasien,
-                    tgl_lahir: helper.formatTanggalOnly(pasien.tgl_lahir),
-                    usia: helper.hitungUmur(pasien.tgl_lahir),
-                    jenis_kelamin: pasien.jenis_kelamin === 'L' ? 'Laki-laki' : 'Perempuan',
-                    alamat: pasien.alamat
-                },
-                riwayat_rawat_inap: riwayat.map((r, index) => ({
-                    no: index + 1,
-                    no_reg: r.no_reg,
-                    tgl_masuk: helper.formatTanggal(r.tgl_masuk),
-                    tgl_keluar: r.tgl_keluar ? helper.formatTanggal(r.tgl_keluar) : '-',
-                    lama_dirawat: helper.hitungLamaDirawat(r.tgl_masuk, r.tgl_keluar),
-                    kelas: r.kelas,
-                    kamar: r.kamar,
-                    no_bed: r.no_bed,
-                    dokter: r.dokter,
-                    diagnosa: r.diagnosa_masuk,
-                    status: r.status,
-                    no_sep: r.no_sep,
-                    gol_pasien: r.gol_pasien
-                }))
-            };
-            
-            res.json(response);
+                total: rows.length,
+                data: rows
+            });
             
         } catch (error) {
-            console.log('⚠️  Error:', error.message);
+            console.error('❌ SEARCH ERROR:', error.message);
             res.status(500).json({
                 success: false,
-                message: 'Gagal mengambil riwayat pasien'
+                message: 'Gagal mencari',
+                error: error.message
             });
         }
     },
-
-    // Statistik rawat inap
-    statistik: async (req, res) => {
+    
+    // 6. UPDATE STATUS
+    updateStatus: async (req, res) => {
         try {
-            const { tanggal } = req.query;
+            const { no_reg } = req.body;
+            console.log(`🔄 UPDATE STATUS: ${no_reg}`);
             
-            console.log(`✅ Statistik rawat inap: ${tanggal || 'all'}`);
+            if (!no_reg) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'No registrasi diperlukan'
+                });
+            }
             
-            const stats = {
-                total_pasien: mockData.mockRawatInap.length,
-                dirawat: mockData.mockRawatInap.filter(p => p.status === 'Dirawat').length,
-                pulang: mockData.mockRawatInap.filter(p => p.status === 'Pulang').length,
-                pindah: mockData.mockRawatInap.filter(p => p.status === 'Pindah').length,
-                
-                per_kelas: {
-                    'VIP DELUXE': mockData.mockRawatInap.filter(p => p.kelas === 'VIP DELUXE').length,
-                    'VIP PREMIUM': mockData.mockRawatInap.filter(p => p.kelas === 'VIP PREMIUM').length,
-                    'KELAS I': mockData.mockRawatInap.filter(p => p.kelas === 'KELAS I').length,
-                    'KELAS II': mockData.mockRawatInap.filter(p => p.kelas === 'KELAS II').length
-                },
-                
-                per_golongan: {
-                    'BPJS': mockData.mockRawatInap.filter(p => p.gol_pasien.includes('BPJS')).length,
-                    'UMUM': mockData.mockRawatInap.filter(p => !p.gol_pasien.includes('BPJS')).length
-                },
-                
-                occupancy_rate: (4 / 20 * 100).toFixed(1) + '%'
-            };
+            const today = new Date().toISOString().split('T')[0];
+            const time = new Date().toTimeString().substring(0, 8);
             
-            const response = {
+            await pool.execute(
+                'UPDATE pasien_inap SET tgl_keluar = ?, jam_keluar = ? WHERE no_reg = ?',
+                [today, time, no_reg]
+            );
+            
+            res.json({
                 success: true,
-                message: '✅ Statistik rawat inap',
-                periode: tanggal ? `Tanggal ${tanggal}` : 'Keseluruhan',
-                statistik: stats,
-                trend: {
-                    hari_ini: 5,
-                    kemarin: 4,
-                    rata_per_bulan: 120,
-                    pertumbuhan: '+25%'
-                }
-            };
-            
-            res.json(response);
+                message: 'Status berhasil diupdate'
+            });
             
         } catch (error) {
-            console.log('⚠️  Error:', error.message);
+            console.error('❌ UPDATE ERROR:', error.message);
             res.status(500).json({
                 success: false,
-                message: 'Gagal mengambil statistik'
+                message: 'Gagal update',
+                error: error.message
+            });
+        }
+    },
+    
+    // 7. KAMAR LIST
+    getKamarList: async (req, res) => {
+        try {
+            console.log('🏥 KAMAR LIST');
+            
+            const [rows] = await pool.execute(
+                'SELECT DISTINCT kode_kamar FROM pasien_inap WHERE kode_kamar IS NOT NULL ORDER BY kode_kamar'
+            );
+            
+            res.json({
+                success: true,
+                total: rows.length,
+                data: rows.map(r => r.kode_kamar)
+            });
+            
+        } catch (error) {
+            console.error('❌ KAMAR LIST ERROR:', error.message);
+            res.status(500).json({
+                success: false,
+                message: 'Gagal mengambil kamar',
+                error: error.message
+            });
+        }
+    },
+    
+    // 8. CHECK TABLES
+    checkTables: async (req, res) => {
+        try {
+            console.log('🔍 CHECK TABLES');
+            
+            // Cek apakah tabel pasien_inap ada
+            const [[exists]] = await pool.execute(
+                `SELECT COUNT(*) as exists_flag 
+                 FROM information_schema.tables 
+                 WHERE table_schema = DATABASE() AND table_name = 'pasien_inap'`
+            );
+            
+            if (exists.exists_flag === 0) {
+                return res.json({
+                    success: false,
+                    message: 'Tabel pasien_inap tidak ditemukan di database'
+                });
+            }
+            
+            // Ambil info tabel
+            const [columns] = await pool.execute('DESCRIBE pasien_inap');
+            const [[count]] = await pool.execute('SELECT COUNT(*) as total FROM pasien_inap');
+            const [sample] = await pool.execute('SELECT * FROM pasien_inap LIMIT 2');
+            
+            res.json({
+                success: true,
+                table: 'pasien_inap',
+                exists: true,
+                total_rows: count.total,
+                columns: columns.map(c => c.Field),
+                sample_data: sample
+            });
+            
+        } catch (error) {
+            console.error('❌ CHECK TABLES ERROR:', error.message);
+            res.status(500).json({
+                success: false,
+                message: 'Gagal check tables',
+                error: error.message
             });
         }
     }
 };
 
-module.exports = rawatInapController;
+// ====================
+// HELPER FUNCTIONS
+// ====================
+function formatDateTime(date, time) {
+    try {
+        if (!date || date === '0000-00-00') return '-';
+        
+        let dateTime = date;
+        if (time && time !== '00:00:00') {
+            dateTime = `${date} ${time}`;
+        }
+        
+        const d = new Date(dateTime);
+        if (isNaN(d.getTime())) return date;
+        
+        // Format: DD/MM/YYYY HH:mm
+        const day = d.getDate().toString().padStart(2, '0');
+        const month = (d.getMonth() + 1).toString().padStart(2, '0');
+        const year = d.getFullYear();
+        const hours = d.getHours().toString().padStart(2, '0');
+        const minutes = d.getMinutes().toString().padStart(2, '0');
+        
+        return `${day}/${month}/${year} ${hours}:${minutes}`;
+    } catch (error) {
+        return date || '-';
+    }
+}
+
+// Export controller
+module.exports = ranapController;
